@@ -44,7 +44,7 @@ class SchenduleController {
                 },
             ],
         });
-        res.json(schendule);
+        return res.json(schendule);
     }
 }
 

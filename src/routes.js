@@ -9,6 +9,7 @@ import ProviderController from './app/controllers/ProviderController';
 import FileController from './app/controllers/FileController';
 import AppointmentController from './app/controllers/AppointmentController';
 import SchenduleController from './app/controllers/SchenduleController';
+import NotificationsController from './app/controllers/NotificationsController';
 
 import authMiddleware from './app/middlewares/auth';
 
@@ -37,8 +38,11 @@ routes.get('/providers', ProviderController.index);
 
 routes.post('/appointments', AppointmentController.store);
 routes.get('/appointments', AppointmentController.index);
+routes.delete('/appointments/:id', AppointmentController.delete);
 routes.get('/schendule', SchenduleController.index);
 
+routes.get('/notifications', NotificationsController.index);
+routes.put('/notifications/:id', NotificationsController.update);
 // Criar arquivos para usuarios
 routes.post('/files', upload.single('file'), FileController.store);
 
