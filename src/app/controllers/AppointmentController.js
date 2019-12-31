@@ -7,16 +7,17 @@ import File from '../models/File';
 
 import Notification from '../schemas/Notifications';
 
-import Mail from '../../lib/Mail';
+import CancellationMail from '../jobs/CancellationMail';
+import Queue from '../../lib/Queue';
 
 class AppointmentController {
     async index(req, res) {
         const { page: p = 1 } = req.query;
         const limit = 20;
 
-        const appointment = await Appointment.findAll({
+        const appointment = await Appointment.finddAll({
             where: { user_id: req.userId, canceled_at: null },
-            attributes: ['id', 'date'],
+            attributes: ['id', 'date', 'past', 'cancelable'],
             order: [['date', 'ASC']],
             limit,
             offset: (p - 1) * limit,
@@ -133,6 +134,11 @@ class AppointmentController {
                     as: 'provider',
                     attributes: ['name', 'email'],
                 },
+                {
+                    model: User,
+                    as: 'user',
+                    attributes: ['name'],
+                },
             ],
         });
 
@@ -155,11 +161,7 @@ class AppointmentController {
 
         await appointement.save();
 
-        await Mail.sendMail({
-            to: `${appointement.provider.name} <${appointement.provider.email}>`,
-            subject: 'Agendamento cancelado',
-            text: 'Você tem um novo cancelamento',
-        });
+        await Queue.add(CancellationMail.key, { appointement });
 
         return res.json(appointement);
     }
