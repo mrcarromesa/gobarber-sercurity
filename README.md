@@ -633,3 +633,402 @@ const user = await User.create({
 return res.json(user);
 
 ```
+---
+
+<h2>Criação de controllers</h2>
+
+- Criar o arquivo `src/app/controller/UserController.js`
+
+- Basicamente nesse controller será importado o model de Usuário;
+
+```js
+import User from '../models/User';
+```
+
+- Adicionar o seguinte:
+
+```js
+class UserController {
+    async store(req, res) {
+        const userExists = User.findOne({where: {email: req.body.email}});
+
+        if(userExists) {
+            return res.status(400).json({'error': 'User already exists.'});
+        }
+
+        const { id, name, email, provider } = User.create(req.body);
+
+        return res.json({
+            id, name, email, provider
+        });
+    }
+}
+
+export default new UserController();
+```
+
+- Nas rotas `src/routes.js` importar o controller:
+
+```js
+import UserController from './app/controllers/UserController';
+```
+
+- E criar a rota:
+
+```js
+routes.post('/users',UserController.sotore);
+```
+
+<h2>Testando no Isomnia</h2>
+
+- No Isomnia, criar um novo workspace: gobarber
+- Criar uma pasta: Users
+- Criar rota post: {{ base_url  }}/users
+- Body JSON com um conteúdo:
+
+```json
+{
+	"name": "Nome",
+	"email": "nome@email.com.br",
+	"password_hash": "12345678"
+}
+```
+
+---
+
+<h2>Utilizar hash no password</h2>
+
+- Adicionar mais uma dependencia no projeto:
+
+```bash
+yarn add bcryptjs
+```
+
+- Agora importamos ele no arquivo `src/app/models/User.js`:
+
+```js
+import bcrypt from 'bcryptjs';
+```
+
+- Os campos que estão no model não necessariamente são um reflexo dos campos que estão na tabela,
+são apenas os campos que o usuário poderá preencher quando der um User.create por exemplo.
+
+- Agora criamos um campo `VIRTUAL` o qual não existirá na tabela ele só existirá no model:
+
+```js
+class User extends Model {
+    static init(sequelize) {
+        super.init(
+            {
+                name: Sequelize.STRING,
+                email: Sequelize.STRING,
+                password: Sequelize.VIRTUAL, //campo adicionado
+                password_hash: Sequelize.STRING,
+                provider: Sequelize.BOOLEAN,
+            },
+            {
+                sequelize,
+            }
+        );
+
+
+        return this;
+    }
+}
+```
+
+- Por fim adicionamos um `Hook` do sequelize, basicamente são trechos de código executadas de forma automática baseado em ações que ocorrem no model. O primeiro parametro informamos quando queremos queremos executar a function, e o segundo parametro o trecho de código que será executado. Ex.:
+
+```js
+this.addHook('beforeSave', async user => {
+    if (user.password) {
+        user.password_hash = await bcrypt.hash(user.password, 8);
+    }
+});
+```
+
+- Esse `Hook` acima irá executar antes de salvar os dados na tabela.
+
+- Ele receberá o usuário informado como parametro e o campo que foi passado através do controller.
+
+- Escolhemos o campo que queremos preencher na tabela e atribuímos um valor.
+
+- Ali para utilizar o bcrypt utilizamos um async/await por se tratar de uma function assincrona, informamos o primeiro parametro que é uma string, o segundo que é a força, precisamos colocar um valor não muito alto, para não pesar no processamento.
+
+
+- Dessa forma no Insomnia alteramos a rota de criação de usuário alterando o corpo da requsição para:
+
+```json
+{
+	"name": "Nome",
+	"email": "nome@email.com.br",
+	"password": "12345678"
+}
+```
+
+---
+
+<h2>JWT Conceito</h2>
+
+É uma forma de realizarmos autenticação em api rest full, que são comunicados através de JSON, pois não iremos utilizar o esquema de SESSION.
+
+JWT é Json Web Token.
+
+- Para isso criamos uma rota do tipo post;
+- Envio para essa rota o e-mail e senha do usuário que estou logando;
+- Essa rota verifica na base de dados se tudo está correto e se estiver correto...;
+- Gera um token, ele é gerado através de uma biblioteca;
+- Esse token jwt gera um token em três partes:
+    - Headers: Ele basicamente define o tipo de token que foi gerado. Isso é importante pois quando o front-end for utilizar ele precisará saber o tipo de criptografia que foi gerado.
+    - Payload: são os dados do usuários não sensiveis que podemos utilizar como id, nome, email..., o qual podemos resgatar depois
+     - Assinatura:  Garante que não foi modificado externamete por outro usuário
+
+---
+
+<h2>JWT<h2>
+
+- No arquivo `src/app/models/User.js` vamos adicioar um metodo para verificar comparar a senha informada, criptografando ela e comparando com o hash na tabela, para isso adicionamos mais um metodo nessa class:
+
+```js
+checkPassword(password) {
+    return bcrypt.compare(password, this.password_hash);
+}
+```
+
+- Vamos criar um novo controller, `src/app/controllers/SessionController.js`, não iremos utilizar o UserController.js pois temos que pensar no projeto como entidades, pois estou armazenando uma session e não o usuário em si.
+
+- Intale a nova extensão:
+
+```bash
+yarn add jsonwebtoken
+```
+
+- Basicamente importamos o `models/User` e o `jwt` para o arquivo `SessionController.js`:
+
+```js
+import jwt from 'jsonwebtoken';
+import User from '../models/User';
+
+class SessionController {
+    async store(req, res) {
+
+        const { email, password } = req.body;
+
+        const user = await User.findOne({ where: { email } });
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // verifica se a senha bate com o hash na tabela.
+        if (!(await user.checkPassword(password))) {
+            return res.status(401).json({ error: 'Password does not match' });
+        }
+
+        const { id, name } = user;
+
+        return res.json({
+            user: {
+                id,
+                name,
+                email,
+            },
+            token: jwt.sign({ id }, 'VALOR_UNICO_QUE_SERA_UMA_CHAVE_CRIPTOGRAFA', {
+                expiresIn: 'TEMPO_EXPIRACAO_EX.:_7d',
+            }),
+        });
+    }
+}
+
+export default new SessionController();
+
+```
+
+- os parametros do `jwt`:
+    - chamamos a function sign
+    - Informamos um Payload, no caso informação que queremos incorporar ao jwt,
+    - Um valor de chave único na aplicação
+    - Algumas configurações como o expiresIn que é o tempo de expiração para que o token seja valido para sempre, e o usuário possa reutilizar pelo tempo que quiser. Exemplo de como informar: `7d`
+
+
+- Adicionar em `src/routes.js` a rota para autenticação:
+
+```js
+import SessionController from './app/controllers/SessionController';
+```
+
+```js
+routes.post('/sessions', SessionController.store);
+```
+
+- Testando com o Insomnia:
+
+- Criar uma pasta `Sessions`
+- Criar a rota Create url: {{ base_url  }}/sessions
+- Body JSON:
+
+```js
+{
+	"email": "rodolfo@email.com.br",
+	"password": "12345678"
+}
+```
+
+- Por fim vamos separar as configurações do jwt em um arquivo separado:
+
+- Criar um arquivo `src/config/auth.js` com o seguinte conteúdo:
+
+```js
+export default {
+    secret: 'MINHA_CHAVE', // pode gerar algo aleatorio e inserir aqui
+    expiresIn: '7d', // tempo de expiracao
+};
+
+```
+
+- Importar isso no `SessionController`:
+
+```js
+import authConfig from '../../config/auth';
+```
+
+- E utilizar ele no jwt:
+
+```js
+token: jwt.sign({ id }, authConfig.secret, {
+    expiresIn: authConfig.expiresIn,
+}),
+```
+
+---
+
+<h2>Middleware de autenticação</h2>
+
+Agora que conseguimos gerar o token, precisamos bloquear acesso as demais rotas para serem acessiveis apenas para quem envia o token corretamente, para isso utilizamos o middleware.
+
+Inicialemnte adicionamos um metódo update no arquivo `src/app/controllers/UserController.js` para testarmos adicionamos só um retorne simples:
+
+```js
+async update(req, res) {
+    return res.json({ok: true});
+}
+```
+
+- Criamos a rota no Insomnia:
+
+- Na pasta Users adicionamos a rota Update do tipo PUT com a seguinte url: {{ base_url  }}/users
+
+- e o seguinte conteúo no corpo da requisição body json:
+
+```json
+{
+	"email": "rodolfo@email.com.br",
+	"password": "12345678"
+}
+```
+
+- No arquivo `src/routes.js` criamos a rota do tipo put para users:
+
+```js
+routes.put('/users', UserController.update);
+```
+
+- Crie uma pastinha chamada `src/app/middlewares/` e crie o arquivo `src/app/middleware/auth.js`
+
+- Para utilizar o token no insomnia adquirimos ele atraves da rota `sessions` e copiamos o token e colamos na aba Auth > Bearer Token e colamos esse token no campo token
+
+
+- Por fim nesse arquivo `src/app/middlewares/auth.js` adicione o seguinte conteúdo:
+
+```js
+import jwt from 'jsonwebtoken';
+import { promisify } from 'util'; // promise from node js para utilizar async no export
+import authConfig from '../../config/auth';
+
+export default async (req, res, next) => {
+    // obtendo o token do header.
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+        return res.status(401).json({ error: 'Token not provided' });
+    }
+
+    // separa a string: 'Bearer tokensfdasfadsf34234sfsf'
+    // desestruturar o array
+    const [, token] = authHeader.split(' ');
+
+    try {
+        const decoded = await promisify(jwt.verify)(token, authConfig.secret);
+        // console.log(decoded);
+        req.userId = decoded.id;
+        return next();
+    } catch (error) {
+        return res.status(401).json({ error: 'Token invalid' });
+    }
+};
+
+```
+
+- No arquivo `src/routes.js` importamos o middleware:
+
+```js
+import authMiddleware from './app/middlewares/auth';
+```
+
+- e adicionamos a use:
+
+```js
+routes.use(authMiddleware);
+```
+
+- Tudo acima dele executa normalmente.
+
+- O que está abaixo dele será filtrado pelo próprio middleware para definir se será executado ou não.
+
+- Para decodar o jwt, por padrão ele utiliza o metodo asincrono porém mais antigo que utiliza calback, então para utilizarmos o async/awaite, utilizamos uma lib que já vem por padrão no node:
+
+```js
+import { promisify } from 'util';
+```
+
+- O promisify pega uma função de callback e transforma ela em async/await
+    - Primeiro informo a function que quero transformar em async/await
+    - Informo uma segunda function que o promisify retorno informando
+        - o token e o secret.
+
+- No middleware utilizamos o try catch pois pode ser lançada uma exeção.
+
+- Dentro do try caso conseguir decodificar  podemos dar o `return next();` ou seja continua o fluxo da aplicação normalmente, do contrário ele para e e retorna uma resposta através do `return res....`
+
+- o `decoded.id` é a propriedade que passamos através do `SessionController.js` no trecho:
+
+```js
+token: jwt.sign({ id }, 'VALOR_UNICO_QUE_SERA_UMA_CHAVE_CRIPTOGRAFA', {
+    expiresIn: 'TEMPO_EXPIRACAO_EX.:_7d',
+}),
+```
+
+- Então id passado ali é o que estamos recuperando aqui no `decode.id` no arquivo `src/app/middlewares/auth.js`:
+
+```js
+const decoded = await promisify(jwt.verify)(token, authConfig.secret);
+// console.log(decoded);
+req.userId = decoded.id;
+```
+
+- Adicionamos a varivel de requisição o `req` uma propriedade que chamamos de `userId` ficando dessa forma:
+
+```js
+req.userId = decoded.id;
+```
+
+- Com isso podemos utilizar essa propriedade em qualquer rota após o middleware
+
+- Dessa forma no no `src/app/controllers/UserController.js`
+
+```js
+async update(req, res) {
+    console.log(req.userId);
+    return.json({ok: true});
+}
+```
+

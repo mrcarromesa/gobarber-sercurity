@@ -8,6 +8,8 @@ export default async (req, res, next) => {
         return res.status(401).json({ error: 'Token not provided' });
     }
 
+    // separa a string: 'Bearer tokensfdasfadsf34234sfsf'
+    // desestruturar o array
     const [, token] = authHeader.split(' ');
 
     try {
