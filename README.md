@@ -785,7 +785,7 @@ JWT é Json Web Token.
 
 ---
 
-<h2>JWT<h2>
+<h2>JWT</h2>
 
 - No arquivo `src/app/models/User.js` vamos adicioar um metodo para verificar comparar a senha informada, criptografando ela e comparando com o hash na tabela, para isso adicionamos mais um metodo nessa class:
 
