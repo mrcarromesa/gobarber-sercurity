@@ -1023,7 +1023,7 @@ req.userId = decoded.id;
 
 - Com isso podemos utilizar essa propriedade em qualquer rota após o middleware
 
-- Dessa forma no no `src/app/controllers/UserController.js`
+- Dessa forma no `src/app/controllers/UserController.js`
 
 ```js
 async update(req, res) {
@@ -1032,3 +1032,156 @@ async update(req, res) {
 }
 ```
 
+- Agorar desestruturamos os dados que estão sendo obtidos por `req`,
+
+o o id do usuário estmos obtendo através do header que está sendo enviando e
+transformado no middleware:
+
+```js
+async update(req, res) {
+    const { email, oldPassword } = req.body;
+
+
+    const user = await User.findByPk(req.userId);
+
+    if (email && email !== user.email) {
+        const userExists = await User.findOne({
+            where: { email },
+        });
+
+        if (userExists) {
+            return res.status(400).json({ error: 'User already exists.' });
+        }
+    }
+
+    if (oldPassword && !(await user.checkPassword(oldPassword))) {
+        return res.status(401).json({ error: 'Password does not match' });
+    }
+
+    // realizamos a atualização e obtemos os dados
+    const { id, name, provider } = await user.update(req.body);
+
+    return res.json({ id, name, email, provider });
+}
+```
+
+- o `findByPk()` é uma function do sequelize para buscar pela chave primária
+
+- precisamos verificar se o usuário está tentando alterar o e-mail e caso afirmativo precisamos verificar se o e-mail para o qual está tentando alterar já não está sendo utilizado.
+
+
+- Verificamos se a senha antiga realmente bate.
+
+- No Insomnia alteramos o body da url {{ base_url  }}/users, para:
+
+```json
+{
+	"name": "Rodolfo",
+	"email": "rodolfo@email.com.br",
+	"oldPassword": "12345678",
+	"password": "12345678",
+	"confirmPassword": "12345678"
+}
+```
+
+---
+<h2>Validação de dados</h2>
+
+Para isso podemos utilizar o `yup` instale-o:
+
+```bash
+yarn add yup
+```
+
+- Agora adicione ele no arquivo: `src/app/controllers/UserController.js` import o `yup`:
+
+```js
+import * as Yup from 'yup';
+```
+
+- Agora teremos acesso a todas validações do `yup`
+
+
+- Um exemplo utilizando o Yup:
+
+```js
+const schema = Yup.object().shape({
+    name: Yup.string().required(),
+    email: Yup.string()
+        .email()
+        .required(),
+    password: Yup.string()
+        .required()
+        .min(6),
+});
+
+// Verifica se a validação passou
+if (!(await schema.isValid(req.body))) {
+    return res.status(400).json({ error: 'Validations fails' });
+}
+```
+
+- Um exemplo para atualização:
+
+```js
+
+const schema = Yup.object().shape({
+    name: Yup.string(),
+    email: Yup.string().email(),
+    oldPassword: Yup.string().min(6),
+    password: Yup.string()
+        .min(6)
+        // when condicional (quando o oldPawssword), (campo oldPassword, campo atual) =>
+        // oldPassword totalmente ok ? torna o password obrigatorio : retorna o field (no caso password) como estava antes
+        .when('oldPassword', (oldPassword, field) =>
+            oldPassword ? field.required() : field
+        ),
+        // exemplo de confirmacao de senha
+    confirmPassword: Yup.string().when('password', (password, field) =>
+        password ? field.required().oneOf([Yup.ref('password')]) : field
+    ),
+});
+
+if (!(await schema.isValid(req.body))) {
+    return res.status(400).json({ error: 'Validations fails' });
+}
+```
+
+---
+
+**Extra Exemplo de validação de cpf e cpfOuEmail no mesmo campo**
+
+```js
+import * as Yup from 'yup';
+// add de yarn add cpf-cnpj-validator
+import { cpf } from 'cpf-cnpj-validator';
+
+Yup.addMethod(Yup.string, 'cpf', () => {
+  return Yup.mixed().test('cpf', 'CPF Inválido', (val) => {
+    return cpf.isValid(val);
+  });
+});
+
+Yup.addMethod(Yup.string, 'cpfEmail', () => {
+  return Yup.mixed().test(
+    'cpf-email',
+    'Informe um e-mail ou CPF válido',
+    (val) => {
+      if (val === undefined) {
+        return false;
+      }
+
+      if (val.includes('@')) {
+        return Yup.string().email().isValid(val);
+      }
+      return Yup.string().cpf().isValid(val);
+    }
+  );
+});
+
+const schema = Yup.object().shape({
+    login: Yup.string()
+        .required('Campo obrigatório')
+        .cpfEmail('Informe um e-mail ou CPF válido'),
+});
+```
