@@ -1185,3 +1185,206 @@ const schema = Yup.object().shape({
         .cpfEmail('Informe um e-mail ou CPF válido'),
 });
 ```
+
+
+---
+
+<h2>Upload de arquivos</h2>
+
+- Para o envio de arquivos para o servidor precisamos utilizar o formato `multipart form`
+
+- Instalamos a dependência:
+
+```bash
+yarn add multer
+```
+
+- Criar na raiz do projeto uma pasta chamada `tmp/uploads/` no qual serão inseridos todos os uploads
+
+- criar o arquivo `src/config/multer.js` ficará toda a configuração para o upload de arquivo
+
+```js
+import multer from 'multer'; // dependencia para upload de arquivos
+import crypot from 'crypto'; // crypt dos nomes para garantir nomes únicos e evitar cache
+import { extname, resolve } from 'path'; // encontrar o caminho das pastas facilmente
+
+export default {
+    storage: multer.diskStorage({
+        // destino dos arquivos tipo string
+        destination: resolve(__dirname, '..', '..', 'tmp', 'uploads'),
+        // aceita uma function
+        //    (req: os dados da requisição,
+        //     file: os dados do arquivo como nome, tamanho, tipo
+        //     cb: aqui passamos o err em caso de erro ou o nome do arquivo
+        //)
+        filename: (req, file, cb) => {
+            // gerar um nome unico é uma Promise
+            crypot.randomBytes(16, (err, res) => {
+                if (err) return cb(err);
+
+                // cb (Primeiro parametro é o erro e como nao tem passamos null,
+                //     Segundo parametro é o nome da imagem em si.
+                //)
+                // res.toString('hex') transforma o resultado de letras e números em um hexadecimal
+                return cb(
+                    null,
+                    res.toString('hex') + extname(file.originalname)
+                );
+            });
+        },
+    }),
+};
+
+```
+
+- Para utilizar o `multer` criamos uma nova rota em `src/routes.js`:
+
+```js
+import multer from 'multer';
+import multerConfig from './config/multer';
+
+// ...
+
+// middleware
+const upload = multer(multerConfig);
+
+routes.post('/files', upload.single('file'), (req, res) => {
+    return res.json({ok: true});
+});
+
+```
+
+- No Insomnia vamos criar uma pasta chamada `Files`
+
+- Uma requisição chamada `Create` metodo POST Multipart Form url {{base_url}}/files
+
+- Adicionar o campo `file` e selecionar o arquivo que será enviado
+
+- No Auth selecionar o Bearer Token e em Token adicionar o token obtido do session create
+
+- Para obter o arquivo:
+    - O multer libera uma variavel no req chamada `file` quando utiliza o single, quando utiliza vários seria `files` então podemos obter os dados do arquivo através de `req.file`
+
+- Vamos criar o arquivo `src/app/controllers/FileController.js`
+
+- Ajustamos o `routes.js`:
+
+```js
+import FileController from './app/controllers/FileController';
+
+// ...
+
+routes.post('/files', upload.single('file'), FileController.store);
+```
+
+- Vamos criar uma nova tabela no banco...
+    - Execute o comando:
+    ```bash
+    yarn sequelize migrate:create --name=create-files
+    ```
+- Será criado o arquivo dentro da pasta `src/database/` o conteúdo já está no arquivo
+
+- E só executar o comando:
+
+```bash
+yarn sequelize db:migrate
+```
+
+- Agora criamos o model `src/app/models/File.js`
+
+- Adicionar no array de models em `src/database/index.js`:
+
+```js
+
+//...
+
+import File from '../app/models/File';
+
+const models = [
+    //...
+    File
+    //...
+    ];
+```
+
+- No arquivo `src/app/controllers/FileController.js` adicionar o model File
+
+- Vamos ter uma desestruturação com alteração de nome de variavéis para adaptar o mesmo nome que será salvo na base de dados:
+
+```js
+const { originalname: name, filename: path } = req.file;
+
+// Estamos recebendo `originalname` e transformando em `name` e `filename` e transformando para `path`
+```
+
+- Precisamos criar um campo na tabela de usuários para referenciar a imagem para isso criamos mais uma migration:
+
+```bash
+yarn sequelize migration:create --name=avatar-field-to-users
+```
+
+- Será criado um novo arquivo em `src/database/migrations/`
+
+- Esse novo arquivo será um pouco diferente dos outros pois nos outros estavamos criando uma nova tabela
+nesse queremos adicionar um novo campo, então só dá uma olhada no arquivo para mais detalhes, um trecho imporante:
+
+
+```js
+up: (queryInterface, Sequelize) => {
+    // no addColumn inserimos o nome da tabela que queremos alterar
+    // o nome do novo campo
+    return queryInterface.addColumn('users', 'avatar_id', {
+        type: Sequelize.INTEGER,
+        references: { model: 'files', key: 'id' }, // foringkey (model: tabela que será referenciada, key campo equivalente que será referenciado na tabela filha)
+        onUpdate: 'CASCADE', // Quando for atualizado o valor do campo
+        onDelete: 'SET NULL', // Quando o registro for apagado
+        allowNull: true,
+    });
+},
+```
+
+- Depois executar o comando:
+
+```bash
+yarn sequelize db:migrate
+```
+
+---
+
+<h2>Relacionamento entre o model User com o model Files</h2>
+
+- No arquivo `src/app/models/User.js` vamos adicionar mais um metodo static:
+
+```js
+/** Definir foring keys */
+static associate(models) {
+    // Recebe
+    // 1 - a instancia do model Filho
+    // 2 - { o campo da tabela pai que quermos associar }
+    this.belongsTo(models.File, { foreignKey: 'avatar_id', as: 'avatar' });
+}
+```
+
+- No arquivo `src/database/index.js` adicionamos mais um map para chamar o metodo associate:
+
+```js
+.map(
+    model =>
+        model.associate && model.associate(this.connection.models)
+);
+```
+
+- Pecorre o array dos models, verifica se o model possuí o metodo `associate` caso afirmativo chama ele passando todos os models.
+
+- No Insomnia atualizar a rota PUT {{base_url}}/users, adicionando no corpo da requisição o campo `avatar_id` nele iremos colocar o id retornado da requisição do envio do arquivo:
+
+```js
+{
+	"name": "Rodolfo",
+	"email": "rodolfo@email.com.br",
+	"oldPassword": "12345678",
+	"password": "12345678",
+	"confirmPassword": "12345678",
+	"avatar_id": 1
+}
+```
