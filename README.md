@@ -1766,3 +1766,52 @@ const schendule = await Appointment.findAll({
 
 
 ---
+
+<h2>Utilizando o MongoDB</h2>
+
+- Um banco não relacional e performatico
+
+- Primeiro utilizando o docker vamos subir ele executando o seguinte comando no terminal:
+
+```bash
+docker run --name NOME_DA_BASE -p 27017:27017 -d -t mongo
+```
+
+- Executei assim:
+
+```bash
+docker run --name mongobarber -p 27017:27017 -d -t mongo
+```
+
+- Agora no projeto precisamos instalar a dependencia:
+
+```bash
+yarn add mongoose
+```
+
+- Faremos a parte de conexão com a base mongo no arquivo `src/database/index.js`
+
+```js
+import mongoose from 'mongoose';
+
+// ...
+
+constructor() {
+    this.init();
+    this.mongo();
+}
+
+// ...
+
+mongo() {
+    this.mongoConnection = mongoose.connect('mongodb://localhost:27017/gobarber', {
+        useNewUrlParser: true,
+        useFindAndModify: true,
+        useUnifiedTopology: true,
+    });
+}
+```
+
+- `gobarber` é nome da base que iremos utilizar, o mongo irá criar para nós caso ela não exista.
+
+---
