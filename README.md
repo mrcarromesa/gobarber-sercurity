@@ -1815,3 +1815,158 @@ mongo() {
 - `gobarber` é nome da base que iremos utilizar, o mongo irá criar para nós caso ela não exista.
 
 ---
+
+
+<h2>Criar notificação e salvar no mongo</h2>
+
+- No mongo possuí schema e não tabelas, nas tabelas os dados são mais estruturados
+as colunas são iguais para todos os dados daquela tabela.
+
+- Dentro do mongo tem schema free que no caso é liberdade de schema.
+
+- Crie uma pasta `src/app/schemas`
+
+- Crie um arquivo `src/app/schemas/Notification.js`
+
+- Basicamente no schema inserimos o nome do campo, o tipo dele que pode ser qualquer tipo primitivo do JS,
+se ele é obrigatório ou não,
+
+- Temos a opção de informar se esse schema terá os campos de created_at e update_at utilizando o `timestamps: true`
+
+- E por fim exporto o schema passando um nome para ele que será utilizado para criar o schema no mongo e passo o schema.
+
+- Mais detalhes dentro do próprio arquivo.
+
+- Dentro de `src/app/controllers/AppointmentController.js` iremos realizar a inserção da Notificação:
+
+```js
+import Notification from '../schemas/Notifications';
+
+// ...
+
+await Notification.create({
+    content: `Novo agendamento de ${user.name} para ${formattedDate}`,
+    user: provider_id,
+});
+
+```
+
+- Como formata a data:
+
+- Importamos o seguinte:
+
+```js
+import { startOfHour, parseISO, isBefore, format, subHours } from 'date-fns';
+import pt from 'date-fns/locale/pt';
+```
+
+- o `format` utilizamos para formata a data conforme necessidade
+- o `pt` estamos importando o locale do `data-fns` para utilizar o nome do mês em português
+
+- Dessa forma formatamos assim a data:
+
+```js
+// ...
+const formattedDate = format(
+    hourStart,
+    "'dia' dd 'de' MMMM', às' hh:mm'h'",
+    { locale: pt }
+);
+
+// ...
+
+```
+
+- o format o primeiro parametro é um tipo `Date` o segundo parametro é uma string de como queremos formata a nossa string, como algumas combinações são reservadas para realizar a formatação de da data tais como:
+
+    - `d`
+    - `dd`
+    - `MM`
+    - `MMMM`
+    - `hh`
+    - `mm`
+
+- Precisamos utilizar `'` embrulhando os caracteres que serão texto estático.
+
+----
+
+<h2>Visualizar os dados do mongo db</h2>
+
+- Podemos utilizar esse app [MongoDB Compass](https://www.mongodb.com/download-center/compass)
+
+- Na conexão utilizamos isso:
+
+```
+mongodb://localhost:27017/barbermongo
+```
+
+- Ali onde está `barbermongo` é o nome da base que vc inseriu quando instalou via docker.
+
+
+---
+
+<h2>Listar as notifications</h2>
+
+- No arquivo de rotas adicionar:
+
+```js
+import NotificationsController from './app/controllers/NotificationsController';
+
+// ...
+
+routes.get('/notifications', NotificationsController.index);
+```
+
+- Criar o controller `src/app/controllers/NoticationController.js`
+
+- Para listar registro do mongodb realizamos da seguinte forma:
+
+```js
+// buscar todas as notifications onde:
+const noitfications = await Notifications.find({
+    // onde user for igual ao id do usuario logado.
+    user: req.userId,
+})
+    // ordenar de forma decrescente o campo createdAt
+    .sort({ createdAt: 'desc' })
+    // limitar no máximo 20 registros
+    .limit(20);
+```
+
+- No Insomnia criar uma pasta `Notifications` criar um request get `{{base_url}}/notifications`, adicionar o `{{token_provider}}` no Auth
+
+---
+
+<h2>Realizar update no mongoDB</h2>
+
+- No arquivo de rotas adicionar:
+
+```js
+import NotificationsController from './app/controllers/NotificationsController';
+
+// ...
+
+routes.put('/notifications/:id', NotificationsController.update);
+```
+
+- Para atualizar no mongodb realizamos da seguinte forma no arquivo `src/app/controllers/NotificationsController.js`:
+
+```js
+async update(req, res) {
+    const { id } = req.params;
+
+    // Busca e atualiza caso encontrar
+    const notification = await Notifications.findByIdAndUpdate(
+        // Buscar pelo id
+        id,
+        { read: true }, // atualizar read para true
+        { new: true } // Essa é uma opção que atualiza no banco e retorna o registro atualizado, sem essa opção ele iria fazer tudo porém não retornaria o registro atualizado
+    );
+
+    return res.json(notification);
+}
+```
+
+- O `findByIdAndUpdate` utilizamos para encontrar e atualizar, o primeiro parametro é o id que queremos buscar, o segundo paramentro é o que queremos atualizar, o terceiro parametro são opções, no caso estamos utilizando `new: true` o qual permite retornar o registro após ele ser atualizado.
+
+- No Insomnia criamos uma nova rota na pasta Notifications chamada `Update` metodo PUT url `{{base_url}}/notifications/id_no_banco`, adicionar o `{{token_provider}}` no Auth
