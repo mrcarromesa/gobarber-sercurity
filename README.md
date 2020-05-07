@@ -1388,3 +1388,105 @@ static associate(models) {
 	"avatar_id": 1
 }
 ```
+
+
+---
+
+<h2>Consulta dos providers (Prestadores de serviços)</h2>
+
+- Vermos campo virtual com sequelize
+- criar rota para acessar arquivos estaticos
+
+- Criar o controller `src/app/controllers/ProviderController.js` e ele irá utilizar o model de User pois o provider é um usuário
+
+- Verifique os comentários
+
+```js
+import User from '../models/User';
+import File from '../models/File';
+
+class ProviderController {
+    async index(req, res) {
+        // buscar os usuários
+        const providers = await User.findAll({
+        // condicionar apenas os que forem providers
+            where: { provider: true },
+            // campos que devem ser retornados
+            attributes: ['id', 'name', 'email', 'avatar_id'],
+            // para incluir relacionamentos utilizamos o include
+            // podemos incluir quantos relacionamentos forem necessários
+            include: [
+                {
+                    // em model passamos o model que queremos obter os dados
+                    model: File,
+                    // para retornar não o nome da tabela e sim o nome que queremos utilizamos o `as`
+                    as: 'avatar',
+                    // para não retornar todos os campos e sim o que queremos utilizamos o attributes
+                    attributes: ['name', 'path', 'url'],
+                    // O campo url é obtido de um campo virtual no model File
+                },
+            ],
+        });
+
+        return res.json(providers);
+    }
+}
+
+export default new ProviderController();
+
+```
+
+- No arquivo de rotas criamos uma rota:
+
+```js
+routes.get('/providers', ProviderController.index);
+```
+
+
+- No insomnia Criamos uma nova pasta `Providers` criar uma requisição chamada index
+com a url `{{base_ur}}/provider` metodo get e adicionar o token no Auth
+
+- Para retornar o url juntamente na estrutura do JSON, no arquivo `src/app/models/File.js` adicionamos um campo virtual:
+
+```js
+url: {
+    type: Sequelize.VIRTUAL,
+    get() {
+        return `http://url.com.br/files/${this.path}`;
+    },
+},
+```
+
+- Dentro da function `get()` o que retornamos será exibido quando listarmos essa tabela. Esse campo não existe fisicamente, exemplo se inserirmos:
+
+```js
+url: {
+    type: Sequelize.VIRTUAL,
+    get() {
+        return 'Qualquer coisa';
+    }
+}
+```
+
+- irá retornar para o campo `url` o valor `Qualquer coisa`.
+
+- Mas como queremos concatenar a url com o campo `path` utilizamos isso: `return 'http://url.com.br/files/'+this.path;`
+
+- Agora para permitir que o usário consiga acessar essa url e obter o arquivo precisamos realizar uma alteração
+
+- No arquivo `src/app.js` utilizaremos o recurso `static` do `express` que serve para servir arquivos estáticos dentro da nossa aplicação em middlewares() adicionamos:
+
+```js
+import path from 'path'; // importar para facilitar escrever o caminho para pasta de uploads
+
+// ...
+
+// o `/files` é a rota que servirá os arquivos estáticos e ele utiliza apenas o metodo get
+this.server.use(
+    '/files',
+    // inserimos o caminho da pasta onde contem os arquivos estaticos
+    express.static(path.resolve(__dirname, '..', 'tmp', 'uploads'))
+);
+```
+
+
