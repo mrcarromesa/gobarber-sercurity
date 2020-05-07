@@ -1489,4 +1489,280 @@ this.server.use(
 );
 ```
 
+---
 
+<h2>Agendamentos</h2>
+
+- Criar uma migration:
+
+```bash
+yarn sequelize migration:create --name=create-appointments
+```
+
+- Será gerado uma arquivo na pasta `src/database/migrations/`
+
+- O conteúdo pode ser verificado no próprio arquivo.
+
+- Para criar a tabela na base execute o comando:
+
+```bash
+yarn sequelize db:migrate
+```
+
+- Agora vamos criar o model `src/app/models/Appointment.js`
+
+- Algo importante sobre o relacionamento dessa tabela vemos no trecho de código:
+
+```js
+static associate(models) {
+    // quando tenho dois relacionamentos para mesma tabela, sou obrigado
+    // a informar o "as", pois se nao o sequelize ira se perder sobre
+    // qual relacionamento ele ira utilizar
+    this.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
+    this.belongsTo(models.User, {
+        foreignKey: 'provider_id',
+        as: 'provider',
+    });
+}
+```
+
+- Como temos mais de um relacionamento para mesma tabela obrigatóriamente é necessário informar um alias, para o sequelize não se perder.
+
+- Não esqueça de no arquivo `src/database/index.js` importar e adicionar ao array de models mais esse model.
+
+```js
+import Appointment from '../app/models/Appointment';
+
+// ...
+
+const models = [User, File, Appointment];
+
+// ...
+```
+
+- Agora vamos criar o controller do agendamento `src/app/controllers/AppointmentController.js`
+
+- Criar no Insomnia uma pasta `Appointments`
+
+- Criar nas rotas uma rota para os appointments:
+
+```js
+import AppointmentController from './app/controllers/AppointmentController';
+
+// ...
+
+
+routes.post('/appointments', AppointmentController.store);
+routes.get('/appointments', AppointmentController.index);
+```
+
+- Criar uma rota POST nome create body em json, adicionar o token, precisamos assegurar que a requisição está sendo feita por um usuário comum e não um prestador de serviços, a url será `{{base_url}}/appointments`
+
+- O body será:
+
+```json
+{
+    "provider_id": 3,
+    "date": "2019-07-01T18:00:00-03:00"
+}
+```
+
+- Estamos passando o campo de data com o timezone do Brasil
+
+
+---
+
+<h2>Validação de datas</h2>
+
+- Vamos verificar se o agendamento não é uma data passada
+- Se o usuário não está tentando marcar no horário ocupado
+- E trabalhar o intervalo de horários redondos
+
+- Vamos utilizar uma dependencia para trabalhar com datas:
+
+```bash
+yarn add date-fns@next
+```
+
+- Utilizamos o @next para obter a última versão.
+
+
+- No arquivo `src/app/controllers/AppointmentController.js` começamos importando o date-fns:
+
+```js
+import { startOfHour, parseISO, isBefore, format, subHours } from 'date-fns';
+```
+
+- o `parseISO` transforma a data de string para o objeto Date do JS.
+
+- o `startOfHour` sempre irá obter o inicio da hora e não os minutos e segundos, por exemplo, se eu informar `19:30:30` ele irá transformar para `19:00:00`
+
+- Para verificar se a uma data é anterior a outra utilizamos o `isBefore`:
+
+```js
+if (isBefore(hourStart, new Date())) {
+    return res
+        .status(400)
+        .json({ error: 'Past date are not permitted' });
+}
+```
+
+---
+
+- Listar agendamentos no arquivo `src/app/controllers/AppointmentController.js` temos:
+
+```js
+async index(req, res) {
+    // Buscar todos os agendamentos
+    const appointment = await Appointment.findAll({
+        // Buscar onde o user_id for o usuário que está logado
+        // e o agendamento não foi cancelado
+        where: { user_id: req.userId, canceled_at: null },
+        // Definimos os campos que serão retornados
+        attributes: ['id', 'date', 'past', 'cancelable'],
+        // ordenação dos registros
+        order: [['date', 'ASC']],
+
+        // Realizar relacionamento, ou JOIN com outra tabela/model
+        include: [
+            {
+                // Inclumos o model User pois vamos obter os dados do prestador de serviços
+                model: User,
+                // Informamos de qual chave estrangeira estamos obtendo, aqui inserimos o mesmo apelido
+                // da chave que precisamos buscar da tabela que está sendo relacionada
+                as: 'provider', // precisa ser o mesmo as da funcao static associate()
+                // apenas os campos que queremos exibir
+                attributes: ['id', 'name', 'email'],
+                // relacionamento aninhado, ou seja uma subquery
+                include: [
+                    {
+                        // iremos obter o avatar do prestador de servidos
+                        model: File,
+                        as: 'avatar',
+                        // o path é necessário pois o url é virtual e é gerado a partir do path
+                        // sendo assim para exibirmos o url precisamos retornar o path.
+                        attributes: ['name', 'path', 'url'],
+                    },
+                ],
+            },
+        ],
+    });
+    return res.json(appointment);
+}
+
+```
+
+- Comentários explicam melhor o código
+
+- No Insomnia criamos uma rota para pasta `Appointments` chamada List metodo get, url `{{base_url}}/appointments` e no auth inserimos o `token`
+
+
+- Paginação:
+
+- No arquivo `src/app/controllers/AppointmentController.js` adicionamos/alteramos:
+
+```js
+async index(req, res) {
+    // estamos enviando /appointments?page=NUM
+    // caso o page seja undefined atribuimos um valor padrão que será 1
+    const { page: p = 1 } = req.query; // obter a paginação do query params
+    const limit = 20; // Quantidade de limit por vez.
+
+    const appointment = await Appointment.findAll({
+        where: { user_id: req.userId, canceled_at: null },
+        attributes: ['id', 'date', 'past', 'cancelable'],
+        order: [['date', 'ASC']],
+        limit, // limit para paginação
+        offset: (p - 1) * limit, // quantos registros pular
+        include: [
+            {
+                model: User,
+                as: 'provider', // precisa ser o mesmo as da funcao static associate()
+                attributes: ['id', 'name', 'email'],
+                include: [
+                    {
+                        model: File,
+                        as: 'avatar',
+                        attributes: ['name', 'path', 'url'],
+                    },
+                ],
+            },
+        ],
+    });
+    return res.json(appointment);
+}
+
+```
+
+- No Insomnia podemos realizar o teste por adicionar o parametro na url {{base_url}}/appointments no metodo get `?page=1`
+
+---
+
+<h2>Listagem para o prestador de serviços</h2>
+
+- O prestador de serviços poderá verificar sua agenda.
+
+- Criamos o controller `src/app/controllers/SchenduleController.js`
+
+- Criamos a rota:
+
+```js
+import SchenduleController from './app/controllers/SchenduleController';
+
+// ...
+
+routes.get('/schendule', SchenduleController.index);
+```
+
+- No Insomnia criamos uma pasta `Schendule` e a requisição `List` metodo GET url `{{base_url}}/schendule`
+
+- E preciso garantir que estou logado como um prestador de serviço e não um usuário comum
+
+- Vamos criar um token_provider no Enviroments do workspace
+
+- Nos parametros do url vamos adicionar `?date=2020-06-01T00:00:00-03:00`
+
+
+- No nosso controller `src/app/controllers/SchenduleController.js` vamos realizar um between:
+
+```js
+import { startOfDay, endOfDay, parseISO, format } from 'date-fns'; // tratamento de data
+import { Op } from 'sequelize'; // Operadores do sequelize
+
+
+const { date } = req.query;
+
+const parseDay = parseISO(date);
+
+// Obter todos os agendamentos
+const schendule = await Appointment.findAll({
+    // Onde
+    where: {
+        // o provider_id for igual ao usuário logado
+        provider_id: req.userId,
+        // sem cancelamento
+        canceled_at: null,
+        // Between no sequelize
+        date: {
+            // O Op.between preciso colocar entre '[Op.between]' pois como ele é uma variavel e queremos definir como o nome da propriedade dentro do objeto precisamos inserir o '[' e o ']' e ele envia um array que no caso é a data inicial e a data até.
+            [Op.between]: [startOfDay(parseDay), endOfDay(parseDay)],
+        },
+    },
+    order: [['date', 'DESC']],
+    include: [
+        {
+            model: User,
+            as: 'user',
+        },
+    ],
+});
+```
+
+- Alguns comentarios esclarecedores estão no código acima.
+
+- a function `startOfDay` irá obter o inicio do dia informado exemplo se for informado `2020-06-01 10:00:00` será retornado `2020-06-01 10:00:00`
+
+- a function `endOfDay` irá obter o inicio do dia informado exemplo se for informado `2020-06-01 10:00:00` será retornado `2020-06-01 23:59:59`
+
+
+---
