@@ -1971,3 +1971,571 @@ async update(req, res) {
 - O `findByIdAndUpdate` utilizamos para encontrar e atualizar, o primeiro parametro é o id que queremos buscar, o segundo paramentro é o que queremos atualizar, o terceiro parametro são opções, no caso estamos utilizando `new: true` o qual permite retornar o registro após ele ser atualizado.
 
 - No Insomnia criamos uma nova rota na pasta Notifications chamada `Update` metodo PUT url `{{base_url}}/notifications/id_no_banco`, adicionar o `{{token_provider}}` no Auth
+
+
+---
+
+<h2>Cancelamento de agendamento</h2>
+
+- Nas rotas vamos adicionar a seguinte rota:
+
+```js
+routes.delete('/appointments/:id', AppointmentController.delete);
+```
+
+- No arquivo `src/app/controllers/AppointmentController.js` iremos adicionar o metodo delete:
+
+```js
+async delete(req, res) {
+
+    // ...
+}
+```
+
+- Uma function importante que será utilizada é a , primeiro importamos ela:
+
+```js
+import { subHours } from 'date-fns';
+```
+
+- E podemos subtrair quantas horas precisarmos:
+
+```js
+subHours(date, 2);
+```
+
+- Passamos um parametro do tipo `Date` e um número com a quantidade de horas que queremos subtrair
+Ele irá retornar um objeto do tipo `Date` com as horas subtraídas.
+
+- Para compararmos uma hora como outra utilizamos, verificando se a primeira é anterior ou menor que a segunda, utilizamos a function:
+
+```js
+import { isBefore } from 'date-fns';
+
+isBefore(date1, date2);
+```
+
+- No Insomnia criamos uma nova rota dentro da pasta `Appointments` chamada `Delete` metodo `DELETE` url `{{base_url}}/appointments/ID_AQUI`, e inserimos o token em `Auth`
+
+
+---
+
+<h2>Node Mailer</h2>
+
+- Lib para envio de e-mails com o Node.
+
+- Para instalar no projeto execute o comando:
+
+```bash
+yarn add nodemailer
+```
+
+- Mais detalhes: [E-mail NodeJS](https://github.com/mrcarromesa/nodemailer)
+
+- Criar uma config para esssa parte de e-mails em `src/config/mail.js` e inserimos as configurações:
+
+```js
+export default {
+    host: '',
+    port: '',
+    secure: false,
+    auth: {
+        user: '',
+        pass: '',
+    },
+    default: {
+        from: 'Equipe GoBarber <noreply@gobarber.com>',
+    },
+};
+```
+
+- Para realizarmos testes com o envio de e-mail podemos utilizar um serviço chamado [Mailtrap](https://mailtrap.io) ele funciona apenas para ambiente de dev, não servirá para ambiente de prod, só acessar criar uma conta e uma caixa de entrada.
+
+- Depois da conta criada só obter as credenciais que ele gera, e adicionar o arquivo de configuração `src/config/mail.js`
+
+- Criamos também mais uma pasta `src/lib` que conterá algumas configuarações adicionais para o envio de e-mail, pois não faz sentido criá-las dentro do controller.
+
+
+- E vamos criar um arquivo chamado `src/lib/Mail.js`:
+
+```js
+import nodemailer from 'nodemailer';
+import mailConfig from '../config/mail';
+
+class Mail {
+    constructor() {
+        const { host, port, secure, auth } = mailConfig;
+        this.transporter = nodemailer.createTransport({
+            host,
+            port,
+            secure,
+            auth: auth.user ? auth : null,
+        });
+    }
+
+    sendMail(message) {
+        return this.transporter.sendMail({
+            ...mailConfig.default,
+            ...message,
+        });
+    }
+}
+
+export default new Mail();
+
+```
+
+- Poderiamos utilizar apenas o `transporter.sendMail()` porém como queremos adicionar ou redefinir algumas variaveis padrões, seja ela da configuração ou da mensagem utilizamos:
+
+```js
+{
+    ...mailConfig.default,
+    ...message,
+}
+```
+
+- Para realizar o envio de e-mail utilizamos o seguinte:
+
+```js
+import Mail from '../../lib/Mail';
+
+await Mail.sendMail({
+    to: 'Nome <email@email.com>',
+    subject: 'Assunto',
+    text: 'Texto';
+});
+```
+
+---
+
+<h3>Utilizar template de e-mail</h3>
+
+- Os templates que iremos utilizar são arquivos html que poderão receber variaveis do node.
+- O template que iremos utilizar é o [https://handlebarsjs.com](handlebarsjs)
+
+- Para começar instalamos o seguinte:
+
+```bash
+yarn add express-handlerbars nodemailer-express-handlerbars
+```
+
+- Criar a pasta `src/app/views/emails/layouts` e `src/app/views/emails/partials`
+
+- Criar o arquivo `src/app/views/emails/partials/footer.hbs`:
+
+```js
+<br />
+Equipe GoBaber
+```
+
+- Criar o arquivo `src/app/views/emails/layouts/default.hbs`:
+
+```hbs
+<div style="font-family: Arial, Helvetica, sans-serif; font-size: 16px; line-height: 1.6; color: #222; max-width: 600px;">
+    {{{ body }}}
+    {{> footer }}
+</div>
+```
+
+- `{{{ body }}}` será o corpo da mensagem o qual será alimentada, é uma variavel do próprio handlebars, para determinar onde será inserida a mensagem.
+
+- `{{> footer}}` estamos adicionando fragmento da pasta `src/app/views/emails/partials/footer.hbs`, o nome ali da variavel deve ser o mesmo nome do arquivo que queremos adicionar sem a extensão. A pasta do partials está configurada no arquivo `src/lib/Mail.js` na seguinte linha: `partialsDir: resolve(viewPath, 'partials'), `
+
+- Criar o arquivo `src/app/views/emails/cancellation.hbs`
+
+```hbs
+<strong>Olá, {{ provider }}</strong>
+<p>Houve um cancelamento de horário, confira os detalhes abaixo:</p>
+<p>
+    <strong>Cliente: </strong> {{ user }} <br />
+    <strong>Data/Hora</strong> {{ date }} <br />
+
+    <br />
+
+    <small>
+        O horário está novamente disponível para novos agendamentos.
+    </small>
+</p>
+```
+
+- `{{ provider }}`, `{{ user }}`, `{{ date }}` são variáveis que iremos alimentar no envio do e-mail
+
+- No arquivo `src/lib/Mail.js` vamos ajustar:
+
+```js
+import nodemailer from 'nodemailer';
+import { resolve } from 'path'; // resolver os caminhos para obter os templates.
+import exphbs from 'express-handlebars'; // integracao do handlebars com o express
+import nodemailerhbs from 'nodemailer-express-handlebars'; // integracao do handlebars com nodemailer
+
+import mailConfig from '../config/mail';
+
+class Mail {
+    constructor() {
+        const { host, port, secure, auth } = mailConfig;
+        this.transporter = nodemailer.createTransport({
+            host,
+            port,
+            secure,
+            auth: auth.user ? auth : null,
+        });
+
+        // adicionamos algumas configurações ao transporter
+        this.configureTemplates();
+    }
+
+    configureTemplates() {
+        const viewPath = resolve(__dirname, '..', 'app', 'views', 'emails');
+        // adicionando algumas configurações dos temaplates de e-mail ao transporter do nodemailer
+        // para isso utilizamos o use(), para adicionar mais configurações ao trasnporter
+        // o compile é como o nodemailer compila os templates de e-mail, como ele formata a msg
+        this.transporter.use(
+            'compile',
+            // nas configurações do nodemailerhbs utilizamos o motor o engine que será o exphbs
+            nodemailerhbs({
+                viewEngine: exphbs.create({
+                    layoutsDir: resolve(viewPath, 'layouts'), // pasta onde estão os layouts
+                    partialsDir: resolve(viewPath, 'partials'), // pasta onde estão os fragmentos do layout
+                    defaultLayout: 'default', // o nome do arquivo padrão nesse caso esta na pasta ... layouts/default.hbs
+                    extname: '.hbs', // extensão dos arquivos
+                }),
+                viewPath,
+                extName: '.hbs', // aqui também é necessario passar a mesma extensão que estamos passando ali acima.
+            })
+        );
+    }
+
+    sendMail(message) {
+        return this.transporter.sendMail({
+            ...mailConfig.default,
+            ...message,
+        });
+    }
+}
+
+export default new Mail();
+
+```
+
+- Para chamar o envio de e-mail com template utilizamos o seguinte:
+
+```js
+    await Mail.sendMail({
+        to: 'Nome <email@email.com>',
+        subject: 'Assunto',
+        template: 'cancellation', //nome do arquivo sem a extensão dentro da pasta conforme configurado em  `src/lib/Mail.js`, na linha `layoutsDir: resolve(viewPath, 'layouts'),`
+        context: {
+            provider: 'Irá alimentar a variavel {{ provider }}', // <- Leia o conteúdo da variavel para entender
+            user: 'Irá alimentar a variavel {{ user }}', // <- Leia o conteúdo da variavel para entender
+            date: 'Irá alimentar a variavel {{ date }}', // <- Leia o conteúdo da variavel para entender
+        },
+    });
+```
+
+
+---
+
+<h2>Filas</h2>
+
+- Para realizar processos mais demorados como no caso de envio de e-mails podemos utilizar o recurso de filas, no caso ele irá armazenar os processos a serem executados em uma tabela e executar seguindo a fila em segundo plano deixando a aplicação mais peformática.
+
+- Mais detalhes: [Job com nodejs utilizando Bee Queue](https://github.com/mrcarromesa/bee-queue)
+
+---
+
+**Redis**
+
+- O banco de dados que iremos utilizar é o `Redis`, podemos instalar via docker:
+
+```bash
+docker run --name NOME_DA_IMAGEM -p 6379:6379 -d -t redis:alpine
+```
+
+- No lugar de `NOME_DA_IMAGEM` eu utilizei `redisbarber`
+
+- O `alpine` é para instalar uma imagem super leve.
+
+- Vamos criar uma configuração para acessar o redis, crie o arquivo `src/config/redis.js`:
+
+```js
+export default {
+    host: '127.0.0.1',
+    port: 6379,
+};
+```
+
+**Bee Queue**
+
+- Vamos adicionar a dependencia do [bee-queue](https://github.com/bee-queue/bee-queue):
+
+```bash
+yarn add bee-queue
+```
+
+- Criar uma pasta `src/app/jobs`
+
+- Criar o arquivo `src/app/jobs/CancellationMail.js`
+
+```js
+// ...
+
+class CancellationMail {
+    get key() {
+        return 'CancellationMail';
+    }
+
+    async handle({ data }) {
+        // ...
+    }
+    // ...
+}
+```
+
+- Algo interessante é o metodo `get key(){}`
+
+- Se desejarmos acessar a propriedade key podemos realziar da seguinte forma:
+
+```js
+CancellationMail.key;
+```
+
+- E a key será o nome da class, cada job precisa ter uma key, então é bom utilizar esse padrão.
+
+- O metodo `handle` é o que será executado em segundo plano.
+
+- Criar o arquivo `src/lib/Queue.js`
+
+```js
+import Bee from 'bee-queue';
+import CancellationMail from '../app/jobs/CancellationMail';
+
+import redisConfig from '../config/redis';
+
+const jobs = [CancellationMail]; // um array com todos os jobs que queremos executar.
+
+class Queue {
+    constructor() {
+        this.queues = {};
+
+        // Quando Instanciamos a class Queue chamamos o init
+        this.init();
+    }
+
+    init() {
+        // Aqui será pecorrido todo o array jobs[] através do forEach
+        // com a desestruturação vamos obter os metodos que deverão estar em todas as classe de jobs
+        // nesse caso a propriedade key e o metodo handle
+        jobs.forEach(({ key, handle }) => {
+            // Adicionamos a variavel queues de class de forma unica controlado pela chave
+            // A estrutura do servico utilizando o `Bee(...)`
+            this.queues[key] = {
+                // o `Bee()` nos permitirá adicionar os jobs, ele espera:
+                //  1 - a chave unica
+                //  2 - a configuração do redis
+                bee: new Bee(key, {
+                    redis: redisConfig,
+                }),
+                // irá processar o job
+                handle,
+            };
+        });
+    }
+
+    // Adicionar os jobs a suas estruturas correspondentes chamando a partir das chaves
+    // add(Qual estrutura de fila que foi criada quero adicionar o meu job? ,
+    //        os dados que serão processados no handle)
+    add(queue, job) {
+        // retorna o já adcionado job salvo pelo bee queue no redis informando o que deve ser executado
+        return this.queues[queue].bee.createJob(job).save();
+    }
+
+    // Processar a fila
+    processQueue() {
+        // Pecorre os jobs previamente armazenados no array job, assim como metodo `init()` foi utilizado para armazenar estrutura para o jobs,
+        // o `processQueue()` será utilizado para obter as queues armazenadas nos jobs que foram adicionadas pelo metodo `add()`
+        jobs.forEach(job => {
+            // Obtem a estrutura que foi armazenada atraves do metodo `init()`
+            const { bee, handle } = this.queues[job.key];
+            // Executa esse job, com monitoramento de falhas, caso alguma function não exista
+            // caso uma function não possa ser executada e assim por diante.
+            // para utilizar no evento `on()` passamos dois parametros
+            //      1 - qual evento queremos monitorar
+            //      2 - A function que irá receber esse monitoramento
+            bee.on('failed', this.handleFailure).process(handle);
+
+            // o Bee Queue tem outros eventos que podem ser vistos na docs do bee queue
+
+            //poderia ser assim, caso não seja necessário monitorar as falhas:
+            // bee.process(handle);
+        });
+    }
+
+    // function de monitoramento de falhas chamado por:
+    // bee.on('failed', this.handleFailure).process(handle);
+    handleFailure(job, err) {
+        console.log(`Queue ${job.queue.name}: FAILED`, err);
+    }
+}
+
+export default new Queue();
+
+```
+
+- No arquivo `src/app/controllers/AppointmentController.js` adicionamos a chamada da fila:
+
+
+```js
+import CancellationMail from '../jobs/CancellationMail'; // importa o job para obter a chave da prop `key()`
+import Queue from '../../lib/Queue'; // importa a fila para adicionar o job
+
+
+//...
+// primeiro parametro a chave unica no caso uma string
+// segundo parametro os dados que serão processados pelo `handle({data})` no CancellationMail
+await Queue.add(CancellationMail.key, { appointement });
+
+```
+
+- Por fim vamos criar um arquivo que será utilizado para rodar as jobs em background, o arquivo `src/queue.js`
+
+```js
+import Queue from './lib/Queue';
+
+Queue.processQueue();
+
+```
+
+- Ele será executado separado da aplicação principal, dessa forma a fila nunca influencia na peformance da aplicação.
+
+
+- Par permitir utilizar a estrutura do ES6, com o surcrase que já está adicionado ao projeto atual adicionamos o seguinte no `package.json` dentro de `"scripts"`:
+
+```js
+"queue": "nodemon src/queue.js"
+```
+
+- Além de ter a aplicação rodando:
+
+```bash
+yarn dev
+```
+
+- executamos adicionalmente a fila para rodar em background:
+
+```bash
+yarn queue
+```
+
+
+---
+
+<h2>Agenda disponível</h2>
+
+- Nas rotas adicionar a seguinte rota:
+
+```js
+import AvailableController from './app/controllers/AvailableController';
+
+// ...
+
+routes.get('/providers/:providerId/available', AvailableController.index);
+```
+
+- Criar o arquivo `src/app/controllers/AvailableController.js`:
+
+```js
+// ...
+
+const appointments = await Appointment.findAll({
+    where: {
+        provider_id: req.params.providerId,
+        canceled_at: null,
+        date: {
+            [Op.between]: [
+                startOfDay(searchDate),
+                endOfDay(searchDate),
+            ],
+        },
+    },
+});
+
+const schedule = [
+            '08:00',
+            '09:00',
+            '10:00',
+            '11:00',
+            '12:00',
+            '13:00',
+            '14:00',
+            '15:00',
+            '16:00',
+            '17:00',
+            '18:00',
+            '19:00',
+            '20:00',
+        ];
+
+const available = schedule.map(time => {
+    // temos a string 08:00
+    // utilizando o split abaixo juntamente com a desestruturação obteremos o seguinte
+    // hour será = 08
+    // minute será = 00
+    const [hour, minute] = time.split(':');
+    // aqui abaixo definimos 0 para os segundos
+    // defimos os minutos conforme variavel `minute`
+    // defimos a hora conforme variavel `hour`
+    // utilizando o `Number()` do timestamp que no caso é a variavel `searchDate`
+    const value = setSeconds(
+        setMinutes(setHours(searchDate, hour), minute),
+        0
+    );
+
+    // console.log(value);
+
+
+    return {
+        time, // o time será 08:00; 09:00 ...
+        value: format(value, "yyyy-MM-dd'T'HH:mm:ssxxx"), // Essa é a representação de 2020-05-08T15:00:00-03:00 por exemplo
+        available:
+            // Verificamos se primeira data é superior a segunda data
+            isAfter(value, new Date()) &&
+            // verifica se o horário já `NÃO` está agendado
+            !appointments.find(a =>
+                // Obtem apenas o horário da data obitida na tabela do banco de dados
+                // e verifica se ela é igual ao time
+                format(a.date, 'HH:mm') === time),
+    };
+});
+// ...
+
+```
+
+
+- No Insomnia criar uma pasta `Available` criar um request `List` metodo GET url `{{base_url}}/providers/ID_DO_PROVIDER_AQUI/available`, sem nenhum corpo da requisição e adicionar o token no Auth, no query params adicionar um campo chamado `date` e o valor precisamos enviar um timestamp: o resultado disso por exemplo:
+
+```js
+new Date().getTime();
+```
+
+- Dentro de `src/app/models/Appointment.js` vamos adicionar dois campos virtuais para verificar se os agendamentos já passou ou se ele pode ser cancelado ou não:
+
+```js
+past: {
+    type: Sequelize.VIRTUAL,
+    get() {
+        return isBefore(this.date, new Date());
+    },
+},
+cancelable: {
+    type: Sequelize.VIRTUAL,
+    get() {
+        return isBefore(new Date(), subHours(this.date, 2));
+    },
+},
+```
+
+- Dentro de `src/app/controllers/AppointmentController.js` vamos adicionar os campos para serem listados:
+
+```js
+attributes: ['id', 'date', 'past', 'cancelable'],
+```
