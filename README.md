@@ -1,6 +1,28 @@
 <h1>Go Barber</h1>
 
-<h2>Iniciar novo projeto</h2>
+
+<p align="left">
+  <a href="#iniciar-novo-projeto">Iniciar novo projeto</a><br>
+  <a href="#instalar-o-express">Instalar o express</a><br>
+  <a href="#utilizar-o-surcrase-para-utilizar-funcionalidades-de-import-export">Utilizar o surcrase para utilizar funcionalidades de import export</a><br>
+  <a href="#eslint-e-prettier">ESLint e Prettier</a><br>
+  <a href="#docker">Docker</a><br>
+  <a href="#sequelize-um-pouco-de-teoria">Sequelize um pouco de teoria</a><br>
+  <a href="#criacao-de-controllers">Criação de controllers</a><br>
+  <a href="#bcrypt">bcrypt</a><br>
+  <a href="#jwt">JWT</a><br>
+  <a href="#yup">Yup</a><br>
+  <a href="#multer">multer</a><br>
+  - Relacionamentos Sequelize<br>
+  - fns<br>
+  - mongo<br>
+  - Emails e Templates<br>
+  - Filas<br>
+  - Tratamento de exceções<br>
+</p>
+
+
+## Iniciar novo projeto
 
 ```bash
 yarn init -y
@@ -10,7 +32,7 @@ yarn init -y
 
 ---
 
-<h2>Instalar o express</h2>
+## Instalar o express
 
 ```bash
 yarn add express
@@ -85,7 +107,7 @@ export default routes;
 
 ----
 
-<h2>Utilizar o surcrase para utilizar funcionalidades de `import/export`</h2>
+## Utilizar o surcrase para utilizar funcionalidades de import export
 
 - [ES6 no NodeJS - Sucrase](https://github.com/mrcarromesa/sucrase)
 
@@ -245,7 +267,7 @@ insert_final_newline = true
 
 ---
 
-<h2>Docker</h2>
+## Docker
 
 - Criação de ambientes isolados(containers)
 
@@ -326,7 +348,7 @@ docker log <nome do docker>
 
 ---
 
-<h2>Sequelize um pouco de teoria</h2>
+## Sequelize um pouco de teoria
 
 <h3>ORM</h3>
 
@@ -632,7 +654,7 @@ return res.json(user);
 ```
 ---
 
-<h2>Criação de controllers</h2>
+## Criação de controllers
 
 - Criar o arquivo `src/app/controller/UserController.js`
 
@@ -693,6 +715,7 @@ routes.post('/users',UserController.sotore);
 
 ---
 
+## bcrypt
 <h2>Utilizar hash no password</h2>
 
 - Adicionar mais uma dependencia no projeto:
@@ -782,7 +805,7 @@ JWT é Json Web Token.
 
 ---
 
-<h2>JWT</h2>
+## JWT
 
 - No arquivo `src/app/models/User.js` vamos adicioar um metodo para verificar comparar a senha informada, criptografando ela e comparando com o hash na tabela, para isso adicionamos mais um metodo nessa class:
 
@@ -1084,6 +1107,9 @@ async update(req, res) {
 ```
 
 ---
+
+## yup
+
 <h2>Validação de dados</h2>
 
 Para isso podemos utilizar o `yup` instale-o:
@@ -1187,6 +1213,8 @@ const schema = Yup.object().shape({
 
 
 ---
+
+## multer
 
 <h2>Upload de arquivos</h2>
 
