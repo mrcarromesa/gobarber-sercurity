@@ -2539,3 +2539,154 @@ cancelable: {
 ```js
 attributes: ['id', 'date', 'past', 'cancelable'],
 ```
+
+---
+
+<h2>Controlar a parte de exceções</h2>
+
+- é bom utilizar uma ferramenta para exibir quando a aplicação cai em alguma exceção e salvar um tipo de log, uma ferramenta que podemos utilizar é o [Sentry](https://sentry.io/welcome/)
+
+- Só criar uma conta ou se logar.
+
+- Ir em Projetos Criar novo Projeto, selecionar `Express`
+- De um nome para o projeto
+- E ele dá as intruções para instalar o sentry no projeto
+
+- Executar o comando que ele exibe, no meu caso foi esse:
+
+```bash
+yarn add @sentry/node@5.15.5
+```
+
+- Crie uma config do sentry `src/config/sentry.js` onde será armazenado o dsn.
+
+
+- No arquivo `src/app.js` adicione o seguinte:
+
+```js
+import * as Sentry from '@sentry/node';
+import sentryConfig from './config/sentry';
+
+
+//...
+Sentry.init(sentryConfig);
+
+//...
+// antes de qualquer rota adicionar:
+this.server.use(Sentry.Handlers.requestHandler());
+
+// ...
+
+// após todas as rotas adicionar:
+
+this.server.use(Sentry.Handlers.errorHandler());
+//...
+```
+
+- Porém há um problema que precisa ser resolvido... no caso de functions async o express não consiguirá enviar os erros para o sentry para isso adicionamos uma depêndencia:
+
+
+```bash
+yarn add express-async-errors
+```
+
+- Importar essa lib depois do express e antes de qualquer rota no arquivo `src/app.js`:
+
+```js
+import 'express-async-errors';
+```
+
+- Vamos adicionar outra dependencia:
+
+```bash
+yarn add youch
+```
+
+- Ele faz uma tratativa das mensagens de erro para dar uma visualização melhor para o desenvolvedor
+
+- Ok agora os erros estão sendo capturados, porém a requisição fica travada, para resolver isso após a rotas vamos chamar uma function:
+
+```js
+import Youch from 'youch';
+// ...
+
+this.exceptionHandler();
+
+//...
+
+exceptionHandler() {
+    // middleware de ecxecao
+    // Quando criamos um middleware de ecxecao o primeiro parametro que recebemos é o error
+    this.server.use(async (err, req, res, next) => {
+
+        const errors = await new Youch(err, req).toJSON();
+
+        return res.status(500).json(errors);
+    });
+}
+
+```
+
+
+---
+
+<h2>Variáveis de ambientes</h2>
+
+- Na raiz da aplicação criamos um arquivo chamado `.env`
+
+- E as instruções escrevemos no formato `CHAVE=VALOR`
+
+- É importante adiciona-lo ao .gitignore, pois não é recomendável enviar para o repositório pois contem informações sensiveis
+
+- Precisamos carregar essas variaveis para aplicação para isso instalamos a dependencia:
+
+```bash
+yarn add dotenv
+```
+
+- No arquivo `src/app.js` adicionamos logo no inicio o import:
+
+```js
+import 'dotenv/config';
+```
+
+- Adicionar também no arquivo `src/queue.js` pois executa em processo separado no servidor
+
+```js
+import 'dotenv/config';
+```
+
+- Também no `src/config/database.js` e como não é possível utilizar import ali utilizamos o seguinte logo no inicio do arquivo:
+
+```js
+require('dotenv/config');
+```
+
+- Os arquivos que foram adicionados as variaveis de ambiente:
+    - `models/File.js`
+    - `app.js`, pode conter informações bem sensiveis no erro reportado:
+
+    ```js
+        exceptionHandler() {
+            // middleware de ecxecao
+            this.server.use(async (err, req, res, next) => {
+                if (process.env.NODE_ENV === 'development') {
+                    const errors = await new Youch(err, req).toJSON();
+
+                    return res.status(500).json(errors);
+                }
+
+                return res.status(500).json({ error: 'Internal server error' });
+            });
+        }
+    ```
+
+    - `config/auth.js`
+    - `config/database.js`
+    - `config/redis.js`
+    - `config/mail.js`
+    - `database/index.js`
+
+- Uma boa prática é criar o arquivo no raiz chamado `.env.example` esse pode ir para o repositório, porém deve conter apenas as chaves e não os valores de arquivo `.env`
+
+---
