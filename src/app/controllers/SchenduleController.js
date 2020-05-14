@@ -41,6 +41,7 @@ class SchenduleController {
                 {
                     model: User,
                     as: 'user',
+                    attributes: ['name'],
                 },
             ],
         });

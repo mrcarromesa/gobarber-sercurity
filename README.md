@@ -2718,3 +2718,128 @@ require('dotenv/config');
 - Uma boa prática é criar o arquivo no raiz chamado `.env.example` esse pode ir para o repositório, porém deve conter apenas as chaves e não os valores de arquivo `.env`
 
 ---
+
+## Permitir acesso por aplicações javascript web
+
+- Instale a dependência:
+
+```bash
+yarn add cors
+```
+
+- No arquivo `src/app.js` importe o `cors`
+
+ ```js
+ import cors from 'cors';
+
+ // ...
+
+ middlewares() {
+    this.server.use(cors());
+ }
+ ```
+
+ - Esse modelo é para ambiente de desenvolvimento, quando for trabalhar em produção podemos inserir a origem:
+
+ ```js
+this.server.use(cors({origin: 'http://.....'}));
+ ```
+
+
+## Retornar informações de avatar após login
+
+- No arquivo `src/app/controllers/SessionController.js` realize os seguintes ajustes:
+
+```js
+import File from '../models/File';
+
+//...
+
+const user = await User.findOne({
+    where: { email },
+    include: [
+        {
+            model: File,
+            as: 'avatar',
+            attributes: ['id', 'path', 'url'],
+        },
+    ],
+});
+
+
+//...
+
+const { id, name, avatar, provider } = user;
+
+return res.json({
+    user: {
+        id,
+        name,
+        email,
+        provider,
+        avatar,
+    },
+    token: jwt.sign({ id }, authConfig.secret, {
+        expiresIn: authConfig.expiresIn,
+    }),
+});
+
+//...
+
+```
+
+- Realizar outro ajuste para quando o usuário alterar os dados ele retornar o novo avatar também
+
+- No arquivo `src/app/controllers/UserController.js` realize o seguinte ajuste:
+
+```js
+import File from '../models/File';
+
+// ...
+
+async update(req, res) {
+    //...
+    await user.update(req.body);
+
+    const { id, name, avatar } = await User.findByPk(req.userId, {
+        include: [
+            {
+                model: File,
+                as: 'avatar',
+                attributes: ['id', 'path', 'url'],
+            },
+        ],
+    });
+
+    return res.json({ id, name, email, avatar });
+    //...
+}
+
+//...
+```
+
+- Ajustar o arquivo `src/app/controllers/ScheduleController.js`:
+
+```js
+//...
+const schendule = await Appointment.findAll({
+    where: {
+        provider_id: req.userId,
+        canceled_at: null,
+        date: {
+            [Op.between]: [startOfDay(parseDay), endOfDay(parseDay)],
+        },
+    },
+    order: [['date', 'DESC']],
+    limit,
+    offset: (p - 1) * limit,
+    include: [
+        {
+            model: User,
+            as: 'user',
+            attributes: ['name'],
+        },
+    ],
+});
+//...
+```
