@@ -1,13 +1,12 @@
-import { startOfHour, parseISO, isBefore, format, subHours } from 'date-fns';
-import pt from 'date-fns/locale/pt';
+import { isBefore, subHours } from 'date-fns';
 import Appointment from '../models/Appointment';
 import User from '../models/User';
 import File from '../models/File';
 
-import Notification from '../schemas/Notifications';
-
 import CancellationMail from '../jobs/CancellationMail';
 import Queue from '../../lib/Queue';
+
+import CreateAppointmentService from '../services/CreateAppointmentService';
 
 class AppointmentController {
     async index(req, res) {
@@ -40,76 +39,11 @@ class AppointmentController {
 
     async store(req, res) {
         const { provider_id, date } = req.body;
-        if (provider_id === req.userId) {
-            return res
-                .status(400)
-                .json({ error: 'User dos not be equals  provider!' });
-        }
-        /**
-         * Check if provider_id is a provider
-         *
-         */
 
-        const checkIsProvider = await User.findOne({
-            where: {
-                id: provider_id,
-                provider: true,
-            },
-        });
-
-        if (!checkIsProvider) {
-            return res.status(401).json({
-                error: 'You can only create appointements with providers',
-            });
-        }
-
-        /**
-         * Check for past dates
-         */
-        const hourStart = startOfHour(parseISO(date));
-        if (isBefore(hourStart, new Date())) {
-            return res
-                .status(400)
-                .json({ error: 'Past date are not permitted' });
-        }
-
-        /**
-         * Check for date availability
-         */
-        const checkAvailability = await Appointment.findOne({
-            where: {
-                provider_id,
-                canceled_at: null,
-                date: hourStart,
-            },
-        });
-
-        if (checkAvailability) {
-            return res
-                .status(400)
-                .json({ error: 'Appointament date is not available' });
-        }
-
-        const appointement = await Appointment.create({
-            user_id: req.userId,
+        const appointement = await CreateAppointmentService.run({
             provider_id,
-            date: hourStart,
-        });
-
-        /**
-         * Notify appontment provider
-         */
-
-        const user = await User.findByPk(req.userId);
-        const formattedDate = format(
-            hourStart,
-            "'dia' dd 'de' MMMM', às' hh:mm'h'",
-            { locale: pt }
-        );
-
-        await Notification.create({
-            content: `Novo agendamento de ${user.name} para ${formattedDate}`,
-            user: provider_id,
+            userId: req.userId,
+            date,
         });
 
         // const { provider_id, date } = await Appointment.create(req.body);

@@ -69,3 +69,27 @@ routes.post('/users', validateUserStore, UserController.store);
 ```
 
 - Realizamos o mesmo com o de session e appointment
+
+---
+
+## Lógica mais complexas dentro do controller movemos para services
+
+- O controller `AppointmentController.js` contem código muito denso, o qual seria interessante transferirmos um pouco da lógica para um serviço.
+
+- Vamos criar a pasta `src/app/services/` e vamos separar partes da lógica
+
+- Vamos criar o arquivo `CreateAppointmentService`,
+
+- O objeto service ele será um singleton, ele jamais poderá ter acesso ao objeto req do express e nem ao objeto res.
+
+- No lugar do res utilizamos o `throw new Error('ERROR');`
+
+- Por fim para chamar o serviço utilizamos:
+
+```js
+const appointement = await CreateAppointmentService.run({
+    provider_id,
+    userId: req.userId,
+    date,
+});
+```
