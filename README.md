@@ -93,3 +93,17 @@ const appointement = await CreateAppointmentService.run({
     date,
 });
 ```
+
+
+---
+
+- Transferindo a lógica do cancelamento do agendamento para um service
+
+- Sobre o cancelmento pode ser que ele seja replicado para um link ou pode ser feito de outra forma, dessa forma é ideal transferimos isso para um service.
+
+
+---
+
+- Também iremos ajustar o `AvailableController` criando o serviço para ele.
+
+- Os demais controllers estão ainda bem legíveis, caso futuramente for implementado mais código que fique a leitura um tanto dificil podemos abstrair mais código, o importante é que o desenvolvedor possa ler e entender facilmente o código.
