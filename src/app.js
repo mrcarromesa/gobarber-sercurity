@@ -4,6 +4,7 @@ import path from 'path';
 import Youch from 'youch';
 
 import cors from 'cors';
+import helmet from 'helmet';
 
 import * as Sentry from '@sentry/node';
 import sentryConfig from './config/sentry';
@@ -25,6 +26,7 @@ class App {
 
     middlewares() {
         this.server.use(cors());
+        this.server.use(helmet()); // <- seguranca extra
         this.server.use(Sentry.Handlers.requestHandler());
 
         this.server.use(express.json());

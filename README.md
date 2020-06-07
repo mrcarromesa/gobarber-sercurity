@@ -34,3 +34,20 @@ routes.post(
     SessionController.store
 );
 ```
+
+
+## Utilizar o Helmet
+
+- Instale:
+
+```bash
+yarn add helmet
+```
+
+- Utilizamos ele para criar alguns headers que adiciona algumas propriedades de segurança, como não permitir executar dentro de um iframe entre outras coisas
+
+- Daí então só adicionar ao express no arquivo `src/app.js`, junto com os demais middlewares:
+
+```js
+
+```
