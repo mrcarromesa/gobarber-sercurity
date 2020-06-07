@@ -4,6 +4,8 @@ import File from '../models/File';
 
 import databaseConfig from '../../config/database';
 
+import Cache from '../../lib/Cache';
+
 class UserController {
     async store(req, res) {
         const userExists = await User.findOne({
@@ -20,6 +22,10 @@ class UserController {
             req.body,
             transaction
         );
+
+        if (provider) {
+            Cache.invalidate('providers');
+        }
 
         // const { id, name, email, provider } = await User.create(req.body);
         return res.json({ id, name, email, provider });

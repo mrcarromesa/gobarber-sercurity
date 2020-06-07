@@ -5,6 +5,8 @@ import User from '../models/User';
 import CancellationMail from '../jobs/CancellationMail';
 import Queue from '../../lib/Queue';
 
+import Cache from '../../lib/Cache';
+
 class CancelAppointmentService {
     async run({ provider_id, userId }) {
         const appointement = await Appointment.findByPk(provider_id, {
@@ -40,6 +42,12 @@ class CancelAppointmentService {
         await appointement.save();
 
         await Queue.add(CancellationMail.key, { appointement });
+
+        /**
+         * Invalidate cache
+         */
+
+        await Cache.invalidatePrefix(`user:${userId}:appointments`);
 
         return appointement;
     }

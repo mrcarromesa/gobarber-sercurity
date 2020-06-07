@@ -107,3 +107,79 @@ const appointement = await CreateAppointmentService.run({
 - Também iremos ajustar o `AvailableController` criando o serviço para ele.
 
 - Os demais controllers estão ainda bem legíveis, caso futuramente for implementado mais código que fique a leitura um tanto dificil podemos abstrair mais código, o importante é que o desenvolvedor possa ler e entender facilmente o código.
+
+
+---
+
+## Utilizando cache
+
+- Para não precisar utilizar muitos recursos do banco podemos utilizar o recurso de cache
+
+- Para isso criamos o arquivo `src/lib/Cache.js`
+
+- Também podemos instalar a lib:
+
+```bash
+yarn add ioredis
+```
+
+- Esse é um cliente de redis  que possuí toda parte de promise integrada podemos trabalhar com o async await...
+
+- No arquivo `src/lib/Cache.js` utilizamos o seguinte:
+
+```js
+this.redis = new Redis({
+    host: process.env.REDIS_HOST,
+    port: process.env.REDIS_PORT,
+    keyPrefix: 'cache:', // prefixo para encontrar mais facilmente quando precisar
+});
+
+
+// ...
+set(key, value) {
+    // Quando o cache deve ser invalidado : segundo * minutos * horas --- No caso abaixo resulta em 24h
+    return this.redis.set(key, JSON.stringify(value), 'EX', 60 * 60 * 24);
+}
+// ...
+```
+
+
+- Dentro de `src/app/controllers/ProviderController.js` realizamos o cache dos prestadores de serviços:
+
+```js
+// Tentar obter do cache
+const cached = await Cache.get('providers');
+
+if (cached) {
+    return res.json(cached);
+}
+
+// ...
+// Salvar em cache
+await Cache.set('provider', providers);
+```
+
+- Agora precisamos invalidar o cache, quando podemos invalidar o cache?
+    - Na criação de um novo usuário seria um bom lugar
+    - Em uma tela de dashboard
+    - * isso tem que ter bastante cuidado no que queremos realzar cache
+
+
+- Vamos adicionar a parte de cache para os agendamentos, para isso utilizamos chave composta no redis
+
+- No arquivo `src/app/controllers/AppointmentController.js`
+
+- Invalidar cache por prefixo:
+
+```js
+async invalidatePrefix(prefix) {
+    // Há algum problema com essa lib que não consegue pegar o keyprefix por isso é necessário realizar dessa forma
+    const keys = await this.redis.keys(`cache:${prefix}:*`);
+
+    const keysWhithoutPrefix = keys.map(key => key.replace('cache:', ''));
+
+    return this.redis.del(keysWhithoutPrefix);
+}
+```
+
+- Por fim para invalidar adicionamos o código em `src/app/services/CreateAppointmentService.js` e em `src/app/services/CancelAppointmentService.js`
