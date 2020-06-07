@@ -49,5 +49,56 @@ yarn add helmet
 - Daí então só adicionar ao express no arquivo `src/app.js`, junto com os demais middlewares:
 
 ```js
+this.server.use(helmet()); // <- seguranca extra
+```
+
+---
+
+## Rate Limit
+
+- Caso alguém fique relaizando alguma chamada direto em uma determinada rota isso pode quebrar a aplicação
+
+
+- Para contornar isso podemos utilizar a dependencia:
+
+```bash
+yarn add express-rate-limit redis
+```
+
+- E também esse:
+
+```bash
+yarn add rate-limit-redis
+```
+
+
+- No arquivo `src/app.js` adicionar:
+
+```js
+
+//...
+import redis from 'redis';
+import RateLimit from 'express-rate-limit';
+import RateLimitRedis from 'rate-limit-redis';
+
+// ...
+if (process.env.NODE_ENV !== 'development') {
+    this.server.use(
+        new RateLimit({
+            store: new RateLimitRedis({
+                client: redis.createClient({
+                    host: process.env.REDIS_HOST,
+                    port: process.env.REDIS_PORT,
+                }),
+            }),
+            windowMs: 1000 * 60 * 15, // <- milisegundos * segundos * minutos
+            max: 100, // maximo de requisições que podem ocorrer dentro do intervalo de minutos
+        })
+    );
+}
+// ...
 
 ```
+
+- Utilizamos sempre no ambiente de produção, pode ser cerca de 100 request a cada 15 minutos
+ por usuário
